@@ -1,0 +1,15 @@
+[Unit]
+Description=Delete snmp-mikrotik CSV logs older than 14 days
+
+# To change the retention window, edit the -mtime value below (days), then:
+#   sudo systemctl daemon-reload
+# No need to touch the .timer — it still just triggers this service daily.
+#
+# events.csv is excluded on purpose: it's a single long-lived, append-only
+# file (start/stop/disconnect/recover history), not a per-run log — its mtime
+# only updates when an event fires, so on a stretch of perfect uptime with no
+# transitions it could otherwise go stale past the window and get swept up.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/find /var/log/snmp-mikrotik -name "*.csv" ! -name "events.csv" -mtime +14 -delete

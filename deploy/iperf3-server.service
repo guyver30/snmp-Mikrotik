@@ -1,0 +1,13 @@
+[Unit]
+Description=iperf3 server (target for the peer R28S's bidir tests)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/iperf3 -s -p 5201
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
