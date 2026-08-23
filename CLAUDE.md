@@ -29,6 +29,8 @@ uv run monitor.py --headless --duration 60
 
 The monitor measures actual bidirectional throughput from SNMP octet counters (`ifInOctets`/`ifOutOctets` on interface 5), not from iperf3 output. iperf3 is used separately for saturating bidir throughput/retransmit tests — see `IPERF_TARGET` below and `deploy/` for the two-host systemd setup.
 
+**iperf3 client console logging** (`_run_iperf_client` in `monitor.py`): each test prints a `[iperf3] starting test to ...` line, a `[iperf3] ... still running (Ns/1800s)...` line once a minute for the duration of the test (via a `Popen` + `communicate(timeout=60)` polling loop, not a single blocking `subprocess.run`), and finally either a `succeeded: fwd=...Mbps rev=...Mbps` line or a `failed: ...` line to stderr. On failure, the logged error includes iperf3's actual `stderr` text (e.g. "unable to connect to server"), not just the subprocess exit code — this is what makes `journalctl -u snmp-mikrotik` useful for diagnosing a bad test without needing to reproduce it manually.
+
 ### Environment variable overrides
 
 `MASTER_IP`, `SLAVE_IP`, `COMMUNITY`, `IPERF_TARGET`, and `LOG_DIR` are Python constants at the top of `monitor.py`, each overridable via env var (`SNMP_MASTER_IP`, `SNMP_SLAVE_IP`, `SNMP_COMMUNITY`, `IPERF_TARGET`, `LOG_DIR`) so the same checkout can run unmodified on multiple hosts with per-host config supplied by systemd `EnvironmentFile`. See `deploy/snmp-mikrotik.env.example`.

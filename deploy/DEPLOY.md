@@ -343,6 +343,44 @@ No need to touch `snmp-mikrotik-cleanup.timer` — it only controls the daily
 trigger, not the retention window. `events.csv` is excluded from cleanup on
 purpose (see comment in the unit file) — it's meant to persist indefinitely.
 
+## Updating the software
+
+Run on each board, one at a time (avoid updating both simultaneously if
+`IPERF_TARGET` is set — a client test running mid-update on one side will
+just fail and retry, but there's no reason to risk both at once).
+
+```bash
+# 1. Stop the services that touch the code/venv
+sudo systemctl stop snmp-mikrotik.service
+sudo systemctl stop iperf3-server.service
+
+# 2. Pull the update
+cd ~/snmp-mikrotik
+git pull
+uv sync                # picks up any new/changed dependencies
+
+# 3. Restart services
+sudo systemctl start iperf3-server.service
+sudo systemctl start snmp-mikrotik.service
+
+# 4. Confirm it came back up cleanly
+sudo systemctl status snmp-mikrotik.service iperf3-server.service
+journalctl -u snmp-mikrotik -f
+```
+
+`snmp-mikrotik.service` doesn't need `daemon-reload` or a `cp` back into
+`/etc/systemd/system/` unless the unit file itself (`deploy/snmp-mikrotik.service`)
+changed — it just re-execs `uv run monitor.py --headless` from
+`~/snmp-mikrotik` on start, so a plain `git pull` + restart is enough for
+`monitor.py` changes. If the unit file *did* change, re-run the `sed` +
+`cp` step from initial setup (substituting your actual username) before
+`daemon-reload` and restart.
+
+The stop is a graceful `SIGTERM`, which `monitor.py` catches to log a
+`monitor_stop` event — expect a fresh `link_log_<timestamp>.csv` /
+`iperf_log_<timestamp>.csv` pair and a new `monitor_start` event in
+`events.csv` after the restart.
+
 ## Resilience to a peer reboot
 
 - SNMP polling on each board is independent of the peer board's state — it
