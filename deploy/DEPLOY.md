@@ -403,7 +403,23 @@ changed — it just re-execs `uv run monitor.py --headless` from
 `~/snmp-mikrotik` on start, so a plain code sync + restart is enough for
 `monitor.py` changes. If the unit file *did* change, re-run the `sed` +
 `cp` step from initial setup (substituting your actual username) before
-`daemon-reload` and restart.
+`daemon-reload` and restart:
+
+```bash
+sed -i "s/REPLACE_WITH_YOUR_USERNAME/pi/g; s#REPLACE_WITH_UV_ABS_PATH#$(command -v uv)#g" \
+  deploy/snmp-mikrotik.service
+sudo cp deploy/snmp-mikrotik.service /etc/systemd/system/
+sudo systemctl daemon-reload
+```
+
+**This applies to the `PYTHONUNBUFFERED=1` fix** added to the unit file —
+without it, `monitor.py`'s `print()`-based status output (iperf3
+start/progress/success lines) is block-buffered under systemd and may
+never show up in `journalctl` in practice, since Python only line-buffers
+stdout when attached to a TTY. If you update `monitor.py` but `journalctl`
+still shows nothing for iperf3 activity, check whether the *unit file* on
+the board actually has `Environment=PYTHONUNBUFFERED=1` — a code-only sync
+won't add it, since that line lives in the unit file, not `monitor.py`.
 
 The stop is a graceful `SIGTERM`, which `monitor.py` catches to log a
 `monitor_stop` event — expect a fresh `link_log_<timestamp>.csv` /

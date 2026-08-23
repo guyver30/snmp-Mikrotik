@@ -7,6 +7,7 @@ Wants=network-online.target
 Type=simple
 User=REPLACE_WITH_YOUR_USERNAME
 WorkingDirectory=/home/REPLACE_WITH_YOUR_USERNAME/snmp-mikrotik
+Environment=PYTHONUNBUFFERED=1
 EnvironmentFile=/etc/snmp-mikrotik/env
 ExecStart=REPLACE_WITH_UV_ABS_PATH run monitor.py --headless
 Restart=on-failure

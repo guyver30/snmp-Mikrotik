@@ -72,7 +72,7 @@ The full OID reference for both devices is in `SNMP_OID_Map_MikroTik_wAP60G.md`.
 `deploy/DEPLOY.md` is the concrete runbook (actual IPs/username) for the current two-board setup. `deploy/` also holds the systemd units themselves, generic/reusable:
 
 - `iperf3-server.service` — bare `iperf3 -s`, `Restart=always`, independent of `monitor.py`'s lifecycle — install and enable on **both** boxes.
-- `snmp-mikrotik.service` — runs `uv run monitor.py --headless`, `Restart=on-failure`, config via `EnvironmentFile=/etc/snmp-mikrotik/env`
+- `snmp-mikrotik.service` — runs `uv run monitor.py --headless`, `Restart=on-failure`, config via `EnvironmentFile=/etc/snmp-mikrotik/env`. Sets `Environment=PYTHONUNBUFFERED=1` — without it, Python block-buffers stdout when it isn't a TTY (i.e. always, under systemd), so `print()`-based status lines (iperf3 start/progress/success) can sit unflushed and never reach `journalctl` in any reasonable time; `stderr` (failures) is unbuffered by default and unaffected.
 - `snmp-mikrotik.env.example` — per-host env template (`LOG_DIR`, `IPERF_TARGET`, etc.)
 - `snmp-mikrotik-cleanup.service` + `.timer` — daily deletion of `*.csv` (except `events.csv`) older than 14 days from `LOG_DIR`
 
