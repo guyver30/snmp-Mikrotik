@@ -76,6 +76,10 @@ The full OID reference for both devices is in `SNMP_OID_Map_MikroTik_wAP60G.md`.
 
 Both boxes run the identical `snmp-mikrotik.service` and codebase; only their `/etc/snmp-mikrotik/env` differs. Set `IPERF_TARGET` on only one of the two boxes — both always run the `iperf3-server` unit, but only one should run the periodic saturating client tests to avoid two simultaneous bidir tests colliding.
 
+### Networking (eth0 to MikroTik, eth1 to laptop)
+
+Each board has two NICs on separate subnets: `eth0` (`192.168.1.0/24`) reaches the MikroTik devices and the other board; `eth1` (`192.168.2.0/24`) is for direct laptop access. `deploy/DEPLOY.md` has the concrete `nmcli` static IP config plus IP forwarding + NAT/masquerade setup (via `nftables`) so a laptop plugged into `eth1` can reach both MikroTik devices and the other board over `eth0` without any config changes on those devices.
+
 ### Resilience to a peer reboot
 
 - **SNMP polling** is unaffected by the peer box rebooting — each box polls the MikroTik AP directly, not the peer. A poll failure (AP unreachable, or the peer box itself down if it were somehow the poll target) sets `snmp_ok=False` in that row and logs an `snmp_down` event; a following successful poll logs `snmp_recovered`.
