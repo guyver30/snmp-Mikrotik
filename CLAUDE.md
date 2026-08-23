@@ -31,6 +31,10 @@ The monitor measures actual bidirectional throughput from SNMP octet counters (`
 
 **iperf3 client console logging** (`_run_iperf_client` in `monitor.py`): each test prints a `[iperf3] starting test to ...` line, a `[iperf3] ... still running (Ns/1800s)...` line once a minute for the duration of the test (via a `Popen` + `communicate(timeout=60)` polling loop, not a single blocking `subprocess.run`), and finally either a `succeeded: fwd=...Mbps rev=...Mbps` line or a `failed: ...` line to stderr. On failure, the logged error includes iperf3's actual `stderr` text (e.g. "unable to connect to server"), not just the subprocess exit code — this is what makes `journalctl -u snmp-mikrotik` useful for diagnosing a bad test without needing to reproduce it manually.
 
+This console output only reaches `journalctl` in a timely way because `deploy/snmp-mikrotik.service` sets `Environment=PYTHONUNBUFFERED=1` — Python block-buffers stdout when it's not a TTY (always true under systemd), so without it these lines could sit unflushed indefinitely while `stderr` (failures) worked fine, since stderr is unbuffered by default.
+
+The very first client test fires immediately when `monitor.py` starts, not after waiting `IPERF_INTERVAL_SEC`. This relies on `_last_iperf_run` being initialized to `float('-inf')`, not `0.0` — `maybe_launch_iperf()`'s gate compares against `time.monotonic()`, which counts seconds since an arbitrary reference point (system boot on Linux), not epoch 0. `0.0` would only read as "in the past" once system uptime exceeded `IPERF_INTERVAL_SEC` (1 hour), silently deferring the first test on any board rebooted less than an hour ago.
+
 ### Environment variable overrides
 
 `MASTER_IP`, `SLAVE_IP`, `COMMUNITY`, `IPERF_TARGET`, and `LOG_DIR` are Python constants at the top of `monitor.py`, each overridable via env var (`SNMP_MASTER_IP`, `SNMP_SLAVE_IP`, `SNMP_COMMUNITY`, `IPERF_TARGET`, `LOG_DIR`) so the same checkout can run unmodified on multiple hosts with per-host config supplied by systemd `EnvironmentFile`. See `deploy/snmp-mikrotik.env.example`.
