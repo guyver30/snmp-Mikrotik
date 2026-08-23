@@ -10,4 +10,4 @@ uv run --extra gui monitor.py
 uv run monitor.py --headless
 ```
 
-See `CLAUDE.md` for OID layout, chart layout, and deployment details. See `deploy/DEPLOY.md` for the exact runbook used to run this unattended on two NanoPi R28S boards.
+See `CLAUDE.md` for OID layout, chart layout, and deployment details. See [`deploy/DEPLOY.md`](deploy/DEPLOY.md) for the exact runbook used to run this unattended on two NanoPi R28S boards.
