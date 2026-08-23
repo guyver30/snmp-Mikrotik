@@ -20,10 +20,14 @@ Log retention: 14 days (`snmp-mikrotik-cleanup.timer`), ~5–7 MB/day/board —
 trivial against the 28GB free on the SD card. See "Changing log retention" below
 if you ever want to adjust it.
 
-## Network setup: static IPs + eth1→eth0 routing (laptop access)
+## Networking overview: eth0 to MikroTik, eth1 to laptop
 
-Do this first, on whichever board(s) will be reachable from a laptop. Each
-board has two NICs:
+Each board has two NICs, ending up on separate static subnets with no
+default gateway on either — **once configured, the board has no internet
+access**, so any step needing apt/PyPI (installing `iperf3`, `uv sync`) must
+happen *before* the network reconfiguration, while the board still has its
+original DHCP address with internet access. This is why each per-board
+section below does installs first, network changes second.
 
 | Interface | Connects to        | Subnet          | r28s-a IP      | r28s-b IP      |
 |-----------|---------------------|-----------------|----------------|----------------|
@@ -43,7 +47,25 @@ profile is typically called `Wired connection 1`, and `eth1` often has no
 profile at all until a cable is plugged in) — so rename/create profiles
 explicitly rather than assuming `nmcli connection modify eth0` will work.
 
-### 1. Static IPs (run on each board, substituting that board's IPs from the table above)
+## r28s-a (192.168.1.90) — iperf3 client schedule
+
+### 1. Copy the project (from your dev machine, while the board still has internet via DHCP)
+
+```bash
+rsync -av --exclude .venv --exclude '.git' --exclude '*.csv' \
+  /home/kone/claude_projects/snmp-Mikrotik/ pi@<r28s-a-dhcp-ip>:~/snmp-mikrotik/
+ssh pi@<r28s-a-dhcp-ip>
+```
+
+### 2. Install dependencies (needs internet — do this before the network step)
+
+```bash
+sudo apt update && sudo apt install -y iperf3
+cd ~/snmp-mikrotik && uv sync
+timedatectl status | grep synchronized     # should say "yes"
+```
+
+### 3. Configure static IPs (board loses internet access after this)
 
 ```bash
 nmcli device status       # confirm eth0/eth1 device state
@@ -70,21 +92,19 @@ sudo nmcli connection add type ethernet ifname eth1 con-name eth1 \
 sudo nmcli connection up eth1
 ```
 
-Adjust the `192.168.1.9x` / `192.168.2.9x` values for r28s-b. If `eth0`
-already has a profile literally named `eth0` (or `eth1` already has a
-profile), skip the rename/add step for that interface and use
+If `eth0` already has a profile literally named `eth0` (or `eth1` already
+has a profile), skip the rename/add step for that interface and use
 `nmcli connection modify <name> ...` directly instead.
 
-### 2. Enable IP forwarding (persistent)
+From this point on, reach the board at `192.168.1.90` (from the MikroTik
+side) or `192.168.2.90` (from a laptop on `eth1`) — not its old DHCP address.
+
+### 4. Enable IP forwarding + NAT (eth1 → eth0)
 
 ```bash
 echo "net.ipv4.ip_forward=1" | sudo tee /etc/sysctl.d/99-ip-forward.conf
 sudo sysctl --system
-```
 
-### 3. NAT eth1 → eth0 (nftables)
-
-```bash
 sudo tee /etc/nftables.conf > /dev/null <<'EOF'
 #!/usr/sbin/nft -f
 flush ruleset
@@ -101,42 +121,9 @@ sudo systemctl enable --now nftables
 sudo systemctl restart nftables
 ```
 
-### 4. Laptop side
-
-Plug the laptop into `eth1` and set a static IP in the same subnet, e.g.
-`192.168.2.10/24`, gateway `192.168.2.90` (or `.91` on r28s-b) — no DNS
-needed for local ssh/Winbox access.
-
-### 5. Verify
-
-From the laptop:
+### 5. Activate services
 
 ```bash
-ping 192.168.2.90        # the R28S itself, on eth1
-ping 192.168.1.80        # MikroTik master, routed via eth1→eth0 NAT
-ssh pi@192.168.1.91      # the other R28S, routed via eth1→eth0 NAT
-```
-
-Winbox to `192.168.1.80`/`192.168.1.81` should also work from the laptop
-once the pings succeed.
-
-## r28s-a (192.168.1.90) — iperf3 client schedule
-
-From your dev machine:
-
-```bash
-rsync -av --exclude .venv --exclude '.git' --exclude '*.csv' \
-  /home/kone/claude_projects/snmp-Mikrotik/ pi@192.168.1.90:~/snmp-mikrotik/
-ssh pi@192.168.1.90
-```
-
-On the board:
-
-```bash
-sudo apt update && sudo apt install -y iperf3
-cd ~/snmp-mikrotik && uv sync
-timedatectl status | grep synchronized     # should say "yes"
-
 sudo mkdir -p /var/log/snmp-mikrotik && sudo chown pi:pi /var/log/snmp-mikrotik
 sudo mkdir -p /etc/snmp-mikrotik
 sudo cp deploy/snmp-mikrotik.env.example /etc/snmp-mikrotik/env
@@ -159,22 +146,70 @@ journalctl -u snmp-mikrotik -f
 
 ## r28s-b (192.168.1.91) — server only, no client schedule
 
-From your dev machine:
+Same order as r28s-a: copy + install (while internet is available), then
+network, then activate services. Only the IPs and the skipped `IPERF_TARGET`
+line differ.
+
+### 1. Copy the project (from your dev machine, while the board still has internet via DHCP)
 
 ```bash
 rsync -av --exclude .venv --exclude '.git' --exclude '*.csv' \
-  /home/kone/claude_projects/snmp-Mikrotik/ pi@192.168.1.91:~/snmp-mikrotik/
-ssh pi@192.168.1.91
+  /home/kone/claude_projects/snmp-Mikrotik/ pi@<r28s-b-dhcp-ip>:~/snmp-mikrotik/
+ssh pi@<r28s-b-dhcp-ip>
 ```
 
-On the board — identical to r28s-a **except leave `IPERF_TARGET=` blank**
-(skip the `sed` line that sets it):
+### 2. Install dependencies (needs internet — do this before the network step)
 
 ```bash
 sudo apt update && sudo apt install -y iperf3
 cd ~/snmp-mikrotik && uv sync
 timedatectl status | grep synchronized
+```
 
+### 3. Configure static IPs (board loses internet access after this)
+
+```bash
+nmcli device status
+nmcli connection show
+```
+
+```bash
+sudo nmcli connection modify "Wired connection 1" connection.id eth0
+sudo nmcli connection modify eth0 \
+  ipv4.addresses 192.168.1.91/24 \
+  ipv4.method manual
+sudo nmcli connection up eth0
+
+sudo nmcli connection add type ethernet ifname eth1 con-name eth1 \
+  ipv4.addresses 192.168.2.91/24 ipv4.method manual
+sudo nmcli connection up eth1
+```
+
+### 4. Enable IP forwarding + NAT (eth1 → eth0)
+
+```bash
+echo "net.ipv4.ip_forward=1" | sudo tee /etc/sysctl.d/99-ip-forward.conf
+sudo sysctl --system
+
+sudo tee /etc/nftables.conf > /dev/null <<'EOF'
+#!/usr/sbin/nft -f
+flush ruleset
+
+table inet nat {
+    chain postrouting {
+        type nat hook postrouting priority 100;
+        oifname "eth0" masquerade
+    }
+}
+EOF
+
+sudo systemctl enable --now nftables
+sudo systemctl restart nftables
+```
+
+### 5. Activate services — identical to r28s-a **except leave `IPERF_TARGET=` blank**
+
+```bash
 sudo mkdir -p /var/log/snmp-mikrotik && sudo chown pi:pi /var/log/snmp-mikrotik
 sudo mkdir -p /etc/snmp-mikrotik
 sudo cp deploy/snmp-mikrotik.env.example /etc/snmp-mikrotik/env   # IPERF_TARGET stays blank
@@ -190,6 +225,21 @@ sudo systemctl enable --now iperf3-server.service
 sudo systemctl enable --now snmp-mikrotik.service
 sudo systemctl enable --now snmp-mikrotik-cleanup.timer
 ```
+
+## Laptop side + verifying the network
+
+Plug the laptop into `eth1` and set a static IP in the same subnet, e.g.
+`192.168.2.10/24`, gateway `192.168.2.90` (or `.91` on r28s-b) — no DNS
+needed for local ssh/Winbox access.
+
+```bash
+ping 192.168.2.90        # the R28S itself, on eth1
+ping 192.168.1.80        # MikroTik master, routed via eth1→eth0 NAT
+ssh pi@192.168.1.91      # the other R28S, routed via eth1→eth0 NAT
+```
+
+Winbox to `192.168.1.80`/`192.168.1.81` should also work from the laptop
+once the pings succeed.
 
 ## Verifying it worked
 
