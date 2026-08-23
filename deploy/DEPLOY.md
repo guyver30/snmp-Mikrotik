@@ -65,6 +65,24 @@ cd ~/snmp-mikrotik && uv sync
 timedatectl status | grep synchronized     # should say "yes"
 ```
 
+The `iperf3` package install prompts "Should iperf3 server start
+automatically?" — answer **No**. Its stock `iperf3.service` would bind the
+same port 5201 as `deploy/iperf3-server.service` (installed in step 5), and
+having both enabled causes one to fail to start. To skip the prompt
+entirely, install non-interactively instead:
+
+```bash
+echo "iperf3 iperf3/start_daemon boolean false" | sudo debconf-set-selections
+sudo DEBIAN_FRONTEND=noninteractive apt install -y iperf3
+```
+
+If you already answered "Yes" by accident, disable the stock service so it
+doesn't fight with `iperf3-server.service`:
+
+```bash
+sudo systemctl disable --now iperf3.service
+```
+
 ### 3. Configure static IPs (board loses internet access after this)
 
 ```bash
@@ -165,6 +183,10 @@ sudo apt update && sudo apt install -y iperf3
 cd ~/snmp-mikrotik && uv sync
 timedatectl status | grep synchronized
 ```
+
+Answer **No** to the "Should iperf3 server start automatically?" prompt (or
+install non-interactively — see the note in the r28s-a section above) so
+the stock `iperf3.service` doesn't conflict with `deploy/iperf3-server.service`.
 
 ### 3. Configure static IPs (board loses internet access after this)
 
