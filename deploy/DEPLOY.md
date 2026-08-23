@@ -363,14 +363,21 @@ just fail and retry, but there's no reason to risk both at once).
 git clone https://github.com/guyver30/snmp-Mikrotik.git   # or: cd snmp-Mikrotik && git pull
 ```
 
-**2. Push the update to the board** (rsync from Linux/macOS, or `scp` from
-Windows — see the "Copy the project" step earlier for the Windows/no-rsync
-options):
+**2. Push the update to the board.** The board's minimal image has no
+`rsync` installed, and since it has no internet access it can't `apt
+install` it either — `rsync host:path` fails with something like
+`bash: line 1: rsync: command not found` / `rsync error ... code 12`
+(that error is coming from the *remote* shell, not your local rsync).
+Use `scp` instead — it only needs SSH, which already works:
 
 ```bash
-rsync -av --exclude .venv --exclude '.git' --exclude '*.csv' \
-  snmp-Mikrotik/ pi@192.168.1.90:~/snmp-mikrotik/    # or 192.168.2.90 from eth1, or .91/.91 for r28s-b
+scp -r snmp-Mikrotik/* pi@192.168.1.90:~/snmp-mikrotik/    # or 192.168.2.90 from eth1, or .91/.91 for r28s-b
 ```
+
+`scp` has no `--exclude`, so make sure `.venv`, `.git`, and `*.csv` aren't
+sitting in `snmp-Mikrotik/` before copying (a fresh `git clone` from step 1
+won't have any of those, so this is only a concern if you're pushing from
+an existing working copy).
 
 **3. On the board — stop, sync, restart:**
 
