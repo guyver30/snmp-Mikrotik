@@ -47,6 +47,25 @@ profile is typically called `Wired connection 1`, and `eth1` often has no
 profile at all until a cable is plugged in) — so rename/create profiles
 explicitly rather than assuming `nmcli connection modify eth0` will work.
 
+### Checking link speed
+
+Both R28S ports should negotiate gigabit. Use `ethtool`, not `nmcli`, to
+check the actual negotiated speed:
+
+```bash
+sudo ethtool eth0 | grep -E "Speed|Duplex|Supported link modes" -A1
+```
+
+Expect `Speed: 1000Mb/s`, `Duplex: Full`, and `1000baseT/Full` listed under
+`Supported link modes` — if `1000baseT/Full` isn't listed at all, that port
+is hardware-limited to 100M; if it's listed but `Speed` still shows 100Mb/s,
+suspect the cable or the switch/hub port on the other end.
+
+`nmcli device show eth0`'s `GENERAL.STATE: 100 (connected)` field is **not**
+a link speed — it's NetworkManager's internal connection-state code (0–100,
+where 100 means "fully activated"). It's easy to misread as "100 Mbps"; it
+isn't related to negotiated speed at all.
+
 ## r28s-a (192.168.1.90) — iperf3 client schedule
 
 ### 1. Copy the project (from your dev machine, while the board still has internet via DHCP)
