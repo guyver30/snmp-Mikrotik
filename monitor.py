@@ -179,10 +179,25 @@ def _run_iperf_client():
     print(f'[iperf3] starting test to {IPERF_TARGET} '
           f'({IPERF_TEST_DURATION_SEC}s, bidir={IPERF_BIDIR})...')
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True,
-            timeout=IPERF_TEST_DURATION_SEC + 15, check=True)
-        data = json.loads(result.stdout)
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, text=True)
+        start = _time.monotonic()
+        while True:
+            try:
+                stdout, stderr = proc.communicate(timeout=60)
+                break
+            except subprocess.TimeoutExpired:
+                elapsed = _time.monotonic() - start
+                if elapsed > IPERF_TEST_DURATION_SEC + 15:
+                    proc.kill()
+                    proc.communicate()
+                    raise subprocess.TimeoutExpired(cmd, elapsed)
+                print(f'[iperf3] test to {IPERF_TARGET} still running '
+                      f'({elapsed:.0f}s / {IPERF_TEST_DURATION_SEC}s)...')
+        if proc.returncode != 0:
+            raise subprocess.CalledProcessError(
+                proc.returncode, cmd, output=stdout, stderr=stderr)
+        data = json.loads(stdout)
         end  = data['end']
         # Forward = client -> server. sum_received is goodput measured at the
         # receiving end (excludes retransmit overhead); sum_sent carries the
