@@ -20,6 +20,92 @@ Log retention: 14 days (`snmp-mikrotik-cleanup.timer`), ~5–7 MB/day/board —
 trivial against the 28GB free on the SD card. See "Changing log retention" below
 if you ever want to adjust it.
 
+## Network setup: static IPs + eth1→eth0 routing (laptop access)
+
+Do this first, on whichever board(s) will be reachable from a laptop. Each
+board has two NICs:
+
+| Interface | Connects to        | Subnet          | r28s-a IP      | r28s-b IP      |
+|-----------|---------------------|-----------------|----------------|----------------|
+| `eth0`    | MikroTik devices    | `192.168.1.0/24`| `192.168.1.90` | `192.168.1.91` |
+| `eth1`    | Laptop (direct/NIC) | `192.168.2.0/24`| `192.168.2.90` | `192.168.2.91` |
+
+This setup uses **NAT/masquerade** from `eth1` to `eth0`: the laptop's
+traffic to the MikroTik devices and to the other board appears to originate
+from the R28S's own `eth0` address, so **no route changes are needed on the
+MikroTik devices or the other R28S**. The laptop still addresses the real
+device IPs directly (e.g. `ssh pi@192.168.1.91`, Winbox to `192.168.1.80`) —
+only the return path is NAT'd.
+
+Networking is managed by **NetworkManager** (`nmcli`) on this image.
+
+### 1. Static IPs (run on each board, substituting that board's IPs from the table above)
+
+```bash
+nmcli connection show   # find the connection names for eth0 / eth1 (often "Wired connection 1/2")
+
+sudo nmcli connection modify eth0 \
+  ipv4.addresses 192.168.1.90/24 \
+  ipv4.method manual
+# no ipv4.gateway on eth0 — MikroTik devices are on the same /24, no gateway needed
+
+sudo nmcli connection modify eth1 \
+  ipv4.addresses 192.168.2.90/24 \
+  ipv4.method manual
+
+sudo nmcli connection up eth0
+sudo nmcli connection up eth1
+```
+
+Adjust the `192.168.1.9x` / `192.168.2.9x` values for r28s-b, and use the
+actual connection names from `nmcli connection show` if they aren't literally
+`eth0`/`eth1`.
+
+### 2. Enable IP forwarding (persistent)
+
+```bash
+echo "net.ipv4.ip_forward=1" | sudo tee /etc/sysctl.d/99-ip-forward.conf
+sudo sysctl --system
+```
+
+### 3. NAT eth1 → eth0 (nftables)
+
+```bash
+sudo tee /etc/nftables.conf > /dev/null <<'EOF'
+#!/usr/sbin/nft -f
+flush ruleset
+
+table inet nat {
+    chain postrouting {
+        type nat hook postrouting priority 100;
+        oifname "eth0" masquerade
+    }
+}
+EOF
+
+sudo systemctl enable --now nftables
+sudo systemctl restart nftables
+```
+
+### 4. Laptop side
+
+Plug the laptop into `eth1` and set a static IP in the same subnet, e.g.
+`192.168.2.10/24`, gateway `192.168.2.90` (or `.91` on r28s-b) — no DNS
+needed for local ssh/Winbox access.
+
+### 5. Verify
+
+From the laptop:
+
+```bash
+ping 192.168.2.90        # the R28S itself, on eth1
+ping 192.168.1.80        # MikroTik master, routed via eth1→eth0 NAT
+ssh pi@192.168.1.91      # the other R28S, routed via eth1→eth0 NAT
+```
+
+Winbox to `192.168.1.80`/`192.168.1.81` should also work from the laptop
+once the pings succeed.
+
 ## r28s-a (192.168.1.90) — iperf3 client schedule
 
 From your dev machine:
