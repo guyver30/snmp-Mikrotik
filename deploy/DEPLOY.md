@@ -10,7 +10,9 @@ only one board runs the periodic iperf3 client test schedule.
 | r28s-b | 192.168.1.91  | pi   | SNMP polling + iperf3 server only        |
 
 Both boards need SNMP (UDP/161) reachability to the MikroTik master AP at
-`192.168.1.80`. Verify before trusting the systemd units:
+`192.168.1.80`. Verify before trusting the systemd units — `snmpget` isn't
+installed by default, it's the `snmp` package (`apt install -y snmp`,
+included in each board's install step below):
 
 ```bash
 snmpget -v2c -c public 192.168.1.80 .1.3.6.1.4.1.14988.1.1.1.8.1.12.3
@@ -79,7 +81,7 @@ ssh pi@<r28s-a-dhcp-ip>
 ### 2. Install dependencies (needs internet — do this before the network step)
 
 ```bash
-sudo apt update && sudo apt install -y iperf3
+sudo apt update && sudo apt install -y iperf3 snmp
 cd ~/snmp-mikrotik && uv sync
 timedatectl status | grep synchronized     # should say "yes"
 ```
@@ -92,7 +94,7 @@ entirely, install non-interactively instead:
 
 ```bash
 echo "iperf3 iperf3/start_daemon boolean false" | sudo debconf-set-selections
-sudo DEBIAN_FRONTEND=noninteractive apt install -y iperf3
+sudo DEBIAN_FRONTEND=noninteractive apt install -y iperf3 snmp
 ```
 
 If you already answered "Yes" by accident, disable the stock service so it
@@ -198,7 +200,7 @@ ssh pi@<r28s-b-dhcp-ip>
 ### 2. Install dependencies (needs internet — do this before the network step)
 
 ```bash
-sudo apt update && sudo apt install -y iperf3
+sudo apt update && sudo apt install -y iperf3 snmp
 cd ~/snmp-mikrotik && uv sync
 timedatectl status | grep synchronized
 ```
