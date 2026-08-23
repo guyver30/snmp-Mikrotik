@@ -161,7 +161,11 @@ def compute_derived(snmp):
 # client-side test schedule lives here.
 
 _iperf_thread   = None
-_last_iperf_run = 0.0
+# -inf, not 0.0: time.monotonic() is seconds since an arbitrary reference
+# point (system boot on Linux), not since epoch 0 — 0.0 would only be "in
+# the past" once system uptime exceeds IPERF_INTERVAL_SEC, silently
+# deferring the very first test on a freshly booted board.
+_last_iperf_run = float('-inf')
 _iperf_lock     = threading.Lock()
 _iperf_last_ok  = None   # None = unknown (no test run yet)
 
