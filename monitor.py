@@ -176,6 +176,8 @@ def _run_iperf_client():
     if IPERF_BIDIR:
         cmd.append('--bidir')
     ok = False
+    print(f'[iperf3] starting test to {IPERF_TARGET} '
+          f'({IPERF_TEST_DURATION_SEC}s, bidir={IPERF_BIDIR})...')
     try:
         result = subprocess.run(
             cmd, capture_output=True, text=True,
@@ -192,6 +194,13 @@ def _run_iperf_client():
             row['rev_mbps']        = round(end['sum_received_bidir_reverse']['bits_per_second'] / 1e6, 2)
             row['rev_retransmits'] = end['sum_sent_bidir_reverse'].get('retransmits', 0)
         ok = True
+        print(f'[iperf3] test to {IPERF_TARGET} succeeded: '
+              f'fwd={row["fwd_mbps"]}Mbps rev={row["rev_mbps"]}Mbps')
+    except subprocess.CalledProcessError as e:
+        # e's default str() only shows the exit code — the actual reason
+        # (e.g. "unable to connect to server") is in stderr, so surface it.
+        row['error'] = f'{type(e).__name__}: exit {e.returncode}: {e.stderr.strip()}'
+        print(f'[iperf3] test to {IPERF_TARGET} failed: {row["error"]}', file=sys.stderr)
     except Exception as e:
         row['error'] = f'{type(e).__name__}: {e}'
         print(f'[iperf3] test to {IPERF_TARGET} failed: {row["error"]}', file=sys.stderr)
