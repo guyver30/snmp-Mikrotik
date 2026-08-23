@@ -37,29 +37,43 @@ MikroTik devices or the other R28S**. The laptop still addresses the real
 device IPs directly (e.g. `ssh pi@192.168.1.91`, Winbox to `192.168.1.80`) —
 only the return path is NAT'd.
 
-Networking is managed by **NetworkManager** (`nmcli`) on this image.
+Networking is managed by **NetworkManager** (`nmcli`) on this image. The
+default connection profile names don't match the interface names (`eth0`'s
+profile is typically called `Wired connection 1`, and `eth1` often has no
+profile at all until a cable is plugged in) — so rename/create profiles
+explicitly rather than assuming `nmcli connection modify eth0` will work.
 
 ### 1. Static IPs (run on each board, substituting that board's IPs from the table above)
 
 ```bash
-nmcli connection show   # find the connection names for eth0 / eth1 (often "Wired connection 1/2")
+nmcli device status       # confirm eth0/eth1 device state
+nmcli connection show     # find eth0's existing profile name, e.g. "Wired connection 1"
+```
 
+`eth1` must show `disconnected` (not `unavailable`) before you can bring up
+a connection on it — `unavailable` means NetworkManager sees no carrier,
+almost always because nothing is plugged in yet. Plug a cable into `eth1`
+first; if it's still `unavailable`, try `sudo ip link set eth1 up`.
+
+```bash
+# Rename eth0's existing profile for clarity, then configure it
+sudo nmcli connection modify "Wired connection 1" connection.id eth0
 sudo nmcli connection modify eth0 \
   ipv4.addresses 192.168.1.90/24 \
   ipv4.method manual
 # no ipv4.gateway on eth0 — MikroTik devices are on the same /24, no gateway needed
-
-sudo nmcli connection modify eth1 \
-  ipv4.addresses 192.168.2.90/24 \
-  ipv4.method manual
-
 sudo nmcli connection up eth0
+
+# eth1 usually has no profile yet — create one
+sudo nmcli connection add type ethernet ifname eth1 con-name eth1 \
+  ipv4.addresses 192.168.2.90/24 ipv4.method manual
 sudo nmcli connection up eth1
 ```
 
-Adjust the `192.168.1.9x` / `192.168.2.9x` values for r28s-b, and use the
-actual connection names from `nmcli connection show` if they aren't literally
-`eth0`/`eth1`.
+Adjust the `192.168.1.9x` / `192.168.2.9x` values for r28s-b. If `eth0`
+already has a profile literally named `eth0` (or `eth1` already has a
+profile), skip the rename/add step for that interface and use
+`nmcli connection modify <name> ...` directly instead.
 
 ### 2. Enable IP forwarding (persistent)
 
