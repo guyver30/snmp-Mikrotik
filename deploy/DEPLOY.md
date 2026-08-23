@@ -70,11 +70,35 @@ isn't related to negotiated speed at all.
 
 ## r28s-a (192.168.1.90) — iperf3 client schedule
 
-### 1. Copy the project (from your dev machine, while the board still has internet via DHCP)
+### 1. Copy the project (while the board still has internet via DHCP)
+
+**From Linux/macOS dev machine (rsync):**
 
 ```bash
 rsync -av --exclude .venv --exclude '.git' --exclude '*.csv' \
   /home/kone/claude_projects/snmp-Mikrotik/ pi@<r28s-a-dhcp-ip>:~/snmp-mikrotik/
+ssh pi@<r28s-a-dhcp-ip>
+```
+
+**From a Windows machine (no rsync) — clone straight from GitHub instead:**
+
+The repo is public at `https://github.com/guyver30/snmp-Mikrotik`, so the
+simplest path is to skip copying files from Windows entirely and clone
+directly on the board:
+
+```bash
+ssh pi@<r28s-a-dhcp-ip>
+git clone https://github.com/guyver30/snmp-Mikrotik.git ~/snmp-mikrotik
+cd ~/snmp-mikrotik
+```
+
+If you have local edits not yet pushed to GitHub, use `scp` from PowerShell
+instead (Windows 10 1809+ ships an OpenSSH client with `scp` built in —
+no extra install needed). `scp` has no `--exclude`, so remove `.venv`
+first if it exists locally:
+
+```powershell
+scp -r C:\path\to\snmp-Mikrotik pi@<r28s-a-dhcp-ip>:~/snmp-mikrotik
 ssh pi@<r28s-a-dhcp-ip>
 ```
 
@@ -189,12 +213,21 @@ Same order as r28s-a: copy + install (while internet is available), then
 network, then activate services. Only the IPs and the skipped `IPERF_TARGET`
 line differ.
 
-### 1. Copy the project (from your dev machine, while the board still has internet via DHCP)
+### 1. Copy the project (while the board still has internet via DHCP)
+
+Same options as r28s-a above — rsync from Linux/macOS, `git clone` directly
+on the board (simplest from Windows), or `scp` for unpushed local edits:
 
 ```bash
+# Linux/macOS
 rsync -av --exclude .venv --exclude '.git' --exclude '*.csv' \
   /home/kone/claude_projects/snmp-Mikrotik/ pi@<r28s-b-dhcp-ip>:~/snmp-mikrotik/
 ssh pi@<r28s-b-dhcp-ip>
+
+# OR, from any machine incl. Windows — clone straight from GitHub on the board
+ssh pi@<r28s-b-dhcp-ip>
+git clone https://github.com/guyver30/snmp-Mikrotik.git ~/snmp-mikrotik
+cd ~/snmp-mikrotik
 ```
 
 ### 2. Install dependencies (needs internet — do this before the network step)
