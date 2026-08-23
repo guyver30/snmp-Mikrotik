@@ -345,25 +345,47 @@ purpose (see comment in the unit file) — it's meant to persist indefinitely.
 
 ## Updating the software
 
-Run on each board, one at a time (avoid updating both simultaneously if
+**Once the [network setup](#networking-overview-eth0-to-mikrotik-eth1-to-laptop)
+above is applied, the board has no internet access** — `eth0`/`eth1` are
+static with no default gateway, so `git pull` and `uv sync` (if it needs to
+fetch a new/changed package) won't work run directly on the board anymore.
+Pull the update on a machine that *does* have internet, then push it to the
+board over the local network (`eth0` or `eth1`, whichever you can reach)
+instead of pulling on the board itself.
+
+Run this against one board at a time (avoid updating both simultaneously if
 `IPERF_TARGET` is set — a client test running mid-update on one side will
 just fail and retry, but there's no reason to risk both at once).
 
+**1. On a machine with internet access** (your dev machine, or the laptop on `eth1`):
+
 ```bash
-# 1. Stop the services that touch the code/venv
+git clone https://github.com/guyver30/snmp-Mikrotik.git   # or: cd snmp-Mikrotik && git pull
+```
+
+**2. Push the update to the board** (rsync from Linux/macOS, or `scp` from
+Windows — see the "Copy the project" step earlier for the Windows/no-rsync
+options):
+
+```bash
+rsync -av --exclude .venv --exclude '.git' --exclude '*.csv' \
+  snmp-Mikrotik/ pi@192.168.1.90:~/snmp-mikrotik/    # or 192.168.2.90 from eth1, or .91/.91 for r28s-b
+```
+
+**3. On the board — stop, sync, restart:**
+
+```bash
 sudo systemctl stop snmp-mikrotik.service
 sudo systemctl stop iperf3-server.service
 
-# 2. Pull the update
 cd ~/snmp-mikrotik
-git pull
-uv sync                # picks up any new/changed dependencies
+uv sync                # only needs internet if pyproject.toml/uv.lock changed;
+                        # if it does and the board has no route, run `uv sync`
+                        # on the dev machine first and rsync the .venv across too
 
-# 3. Restart services
 sudo systemctl start iperf3-server.service
 sudo systemctl start snmp-mikrotik.service
 
-# 4. Confirm it came back up cleanly
 sudo systemctl status snmp-mikrotik.service iperf3-server.service
 journalctl -u snmp-mikrotik -f
 ```
@@ -371,7 +393,7 @@ journalctl -u snmp-mikrotik -f
 `snmp-mikrotik.service` doesn't need `daemon-reload` or a `cp` back into
 `/etc/systemd/system/` unless the unit file itself (`deploy/snmp-mikrotik.service`)
 changed — it just re-execs `uv run monitor.py --headless` from
-`~/snmp-mikrotik` on start, so a plain `git pull` + restart is enough for
+`~/snmp-mikrotik` on start, so a plain code sync + restart is enough for
 `monitor.py` changes. If the unit file *did* change, re-run the `sed` +
 `cp` step from initial setup (substituting your actual username) before
 `daemon-reload` and restart.
